@@ -1,107 +1,124 @@
 #!/usr/bin/env python3
+"""
+Mitmproxy addon: inject HTML/snippet + inline script with nonce, update CSP header/meta safely.
+Dependencies: mitmproxy, beautifulsoup4
+"""
 
 import os
-import re
-from mitmproxy import http
-from mitmproxy import ctx
+import secrets
 from bs4 import BeautifulSoup
+from mitmproxy import http, ctx
 
-# Configuration from environment variables
-INJECT_SELECTOR = os.getenv('INJECT_SELECTOR', 'body')
-INJECT_HTML = os.getenv('INJECT_HTML', '<div style="position:fixed;bottom:16px;right:16px;z-index:2147483647;padding:12px 16px;background:#111;color:#fff;border-radius:8px;font-family:sans-serif;font-size:14px;box-shadow:0 6px 16px rgba(0,0,0,0.35);">Injected by MITMProxy</div>')
-INJECT_SCRIPT = os.getenv('INJECT_SCRIPT', '')
-RAW_DOMAINS = os.getenv('INTERCEPT_DOMAINS', 'example.com')
-DOMAINS = [d.strip().lower() for d in RAW_DOMAINS.split(',') if d.strip()]
-SHOULD_INJECT_EVERYWHERE = len(DOMAINS) == 0
-DOMAIN_SET = set(DOMAINS)
+# Config via environment variables (or hardcode for quick test)
+INJECT_HTML = os.environ.get("INJECT_HTML", '<div id="injected-banner" style="position:fixed;right:12px;bottom:12px;padding:8px;background:#0b74de;color:#fff;border-radius:6px;z-index:2147483647">INJECTED</div>')
+INJECT_SCRIPT = os.environ.get("INJECT_SCRIPT", "console.log('injected script');")
+INJECT_SELECTOR = os.environ.get("INJECT_SELECTOR", "body")  # CSS selector to append snippet into; fallback to body
+
+def add_nonce_to_csp(csp_value: str, nonce: str) -> str:
+    """
+    Add 'nonce-<nonce>' to script-src directive in a CSP header string.
+    If script-src doesn't exist, add it.
+    """
+    nonce_token = f"'nonce-{nonce}'"
+    if not csp_value or not csp_value.strip():
+        return f"script-src 'self' {nonce_token}; object-src 'none'; base-uri 'self'"
+
+    parts = [p.strip() for p in csp_value.split(';') if p.strip()]
+    new_parts = []
+    found = False
+    for part in parts:
+        if part.startswith("script-src"):
+            found = True
+            if "nonce-" in part:
+                new_parts.append(part)
+            else:
+                new_parts.append(part + " " + nonce_token)
+        else:
+            new_parts.append(part)
+    if not found:
+        new_parts.insert(0, f"script-src 'self' {nonce_token}")
+    return "; ".join(new_parts)
 
 class Injector:
     def __init__(self):
-        self.nonce_pattern = re.compile(r'<script[^>]*nonce="([^"]*)"[^>]*>', re.IGNORECASE)
-
-    def load(self, loader):
-        loader.add_option(
-            name="inject_domains",
-            typespec=str,
-            default=RAW_DOMAINS,
-            help="Comma-separated list of domains to inject into"
-        )
+        ctx.log.info("Mitmproxy injector initialized")
 
     def response(self, flow: http.HTTPFlow) -> None:
-        if not flow.response or not flow.response.content:
-            return
-
-        hostname = flow.request.host.lower()
-        if not SHOULD_INJECT_EVERYWHERE and hostname not in DOMAIN_SET:
-            return
-
-        content_type = flow.response.headers.get('content-type', '').lower()
-        if 'text/html' not in content_type:
-            return
-
+        # Only act on valid responses with HTML content
         try:
-            html = flow.response.content.decode('utf-8', errors='ignore')
-            modified_html = self.inject_content(html, hostname)
-            flow.response.content = modified_html.encode('utf-8')
-            flow.response.headers['content-length'] = str(len(flow.response.content))
+            resp = flow.response
+            if resp is None:
+                return
+            ctype = resp.headers.get("content-type", "").lower()
+            if "text/html" not in ctype:
+                return
 
-            ctx.log.info(f"Injected content into {hostname}")
+            # get decoded text (mitmproxy handles decompression)
+            try:
+                html = resp.get_text(strict=False)
+            except Exception as e:
+                ctx.log.warn(f"Could not get text for {flow.request.pretty_url}: {e}")
+                return
+
+            # parse html
+            soup = BeautifulSoup(html, "html.parser")
+
+            # generate nonce for this response
+            nonce = secrets.token_urlsafe(12)
+
+            # inject the HTML snippet into selector (safe)
+            try:
+                snippet = BeautifulSoup(INJECT_HTML, "html.parser")
+                target = soup.select_one(INJECT_SELECTOR)
+                if target:
+                    target.append(snippet)
+                else:
+                    # fallback: append to body if selector not found, or to html
+                    if soup.body:
+                        soup.body.append(snippet)
+                    else:
+                        soup.append(snippet)
+            except Exception as e:
+                ctx.log.error(f"Snippet injection error for {flow.request.pretty_host}: {e}")
+
+            # create script tag with nonce and script content
+            try:
+                script_tag = soup.new_tag("script")
+                script_tag.attrs["nonce"] = nonce
+                script_tag.string = INJECT_SCRIPT
+                # append script near end of body (or html)
+                if soup.body:
+                    soup.body.append(script_tag)
+                else:
+                    soup.append(script_tag)
+            except Exception as e:
+                ctx.log.error(f"Script injection error for {flow.request.pretty_host}: {e}")
+
+            # update Content-Security-Policy header if present (or set new)
+            try:
+                csp_header = resp.headers.get("content-security-policy")
+                new_csp = add_nonce_to_csp(csp_header, nonce)
+                resp.headers["content-security-policy"] = new_csp
+            except Exception as e:
+                ctx.log.warn(f"Failed to update CSP header for {flow.request.pretty_host}: {e}")
+
+            # also update meta CSP tag if exists in HTML
+            try:
+                meta = soup.find("meta", attrs={"http-equiv": lambda v: v and v.lower() == "content-security-policy"})
+                if meta and meta.has_attr("content"):
+                    meta["content"] = add_nonce_to_csp(meta["content"], nonce)
+            except Exception as e:
+                ctx.log.warn(f"Failed to update CSP meta for {flow.request.pretty_host}: {e}")
+
+            # set modified HTML back into response (mitmproxy will recompress as needed)
+            resp.set_text(str(soup))
+
+            ctx.log.info(f"Injected into {flow.request.pretty_host} - {flow.request.path}")
+
         except Exception as e:
-            ctx.log.error(f"Error injecting into {hostname}: {e}")
+            # Catch-all: don't let addon crash mitmproxy
+            ctx.log.error(f"Unexpected injection error for {flow.request.pretty_host}: {e}")
 
-    def inject_content(self, html: str, hostname: str) -> str:
-        soup = BeautifulSoup(html, 'html.parser')
-
-        # Ensure CSP allows inline scripts with nonce
-        self.update_csp(soup)
-
-        # Inject HTML
-        selector = soup.select_one(INJECT_SELECTOR)
-        if selector:
-            selector.append(BeautifulSoup(INJECT_HTML, 'html.parser'))
-        else:
-            if soup.body:
-                soup.body.append(BeautifulSoup(INJECT_HTML, 'html.parser'))
-
-        # Inject script if provided
-        if INJECT_SCRIPT.strip():
-            nonce = self.extract_nonce(soup)
-            script_tag = soup.new_tag('script', nonce=nonce, **{'data-injected': 'mitmproxy'})
-            script_tag.string = INJECT_SCRIPT
-            if soup.body:
-                soup.body.append(script_tag)
-
-        # Add meta tag for tracking
-        meta_tag = soup.new_tag('div', style='display:none!important', **{'data-proxy-meta': 'injected', 'data-host': hostname})
-        if soup.body:
-            soup.body.append(meta_tag)
-
-        return str(soup)
-
-    def update_csp(self, soup):
-        meta_csp = soup.find('meta', attrs={'http-equiv': 'Content-Security-Policy'})
-        if not meta_csp:
-            return
-
-        csp = meta_csp.get('content', '')
-        if not csp:
-            return
-
-        # Add 'nonce-{random}' to script-src if not present
-        import secrets
-        nonce = secrets.token_hex(16)
-        if 'script-src' in csp and "'unsafe-inline'" not in csp:
-            csp = re.sub(r"(script-src[^;]*)", rf"\1 'nonce-{nonce}'", csp)
-        elif 'script-src' not in csp:
-            csp += f" script-src 'self' 'nonce-{nonce}';"
-
-        meta_csp['content'] = csp
-
-    def extract_nonce(self, soup) -> str:
-        scripts = soup.find_all('script', nonce=True)
-        if scripts:
-            return scripts[0]['nonce']
-        import secrets
-        return secrets.token_hex(16)
-
-addons = [Injector()]
+addons = [
+    Injector()
+]
