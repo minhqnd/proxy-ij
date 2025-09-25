@@ -14,6 +14,7 @@ Use it to preview or control content without touching the origin infrastructure 
 - **HTML content injection** using a configurable snippet.
 - **CSP-aware script injection** (uses nonces and updates `Content-Security-Policy`).
 - **Compression aware**: transparently handles Brotli, gzip and deflate payloads.
+- **HTTPS interception** using Mitmproxy for man-in-the-middle capabilities.
 - **Simple configuration** via environment variables.
 - **Health check endpoint** for monitoring (`/health`).
 
@@ -26,7 +27,8 @@ Use it to preview or control content without touching the origin infrastructure 
 ├── scripts
 │   └── install-ca-macos.sh
 ├── src
-│   ├── https-interceptor.js
+│   ├── https-interceptor.js  # Legacy (replaced by mitmproxy-injector.py)
+│   ├── mitmproxy-injector.py # Mitmproxy addon for HTTPS interception
 │   └── server.js
 └── README.md
 ```
@@ -35,6 +37,8 @@ Use it to preview or control content without touching the origin infrastructure 
 
 - Node.js 18 or newer (required for native `fetch` / `undici` stream support).
 - npm 9+ (bundled with Node 18).
+- Python 3.8+ and pip (for Mitmproxy HTTPS interception).
+- Mitmproxy: `pip install mitmproxy`.
 
 ## 🚀 Local development
 
@@ -186,7 +190,14 @@ Below is a simple end-to-end walkthrough for an Ubuntu-based EC2 instance. Adjus
 
 ## 🛡️ HTTPS intercepting proxy (system-wide)
 
-When you need real browsers to connect to the original domain (for example `https://example.com`) while still injecting content, run the HTTPS intercepting proxy. It performs TLS interception, so clients must trust its dynamically generated certificate authority (CA).
+When you need real browsers to connect to the original domain (for example `https://example.com`) while still injecting content, run the HTTPS intercepting proxy using **Mitmproxy**. Mitmproxy is a powerful, open-source HTTPS proxy that allows intercepting, inspecting, modifying, and replaying web traffic.
+
+### Prerequisites
+
+Install Mitmproxy (requires Python 3.8+):
+```bash
+pip install mitmproxy
+```
 
 ### Local proxy setup
 
@@ -199,10 +210,15 @@ If running the proxy on your local machine:
    npm run intercept
    ```
 
-2. **Trust the CA certificate (macOS)**
+2. **Trust the CA certificate**
+   Mitmproxy automatically generates certificates. To install the CA:
+   - Open your browser and go to `http://mitm.it` while the proxy is running.
+   - Follow the instructions to download and install the certificate for your OS.
+
+   Alternatively, for macOS:
    ```bash
-   chmod +x scripts/install-ca-macos.sh
-   ./scripts/install-ca-macos.sh
+   # The CA is usually at ~/.mitmproxy/mitmproxy-ca-cert.pem
+   sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/.mitmproxy/mitmproxy-ca-cert.pem
    ```
 
 3. **Configure your system proxy**
@@ -230,14 +246,13 @@ If running the proxy on a remote server (e.g., EC2) and connecting from your loc
 
 2. **Copy the CA certificate to your local machine**
    ```bash
-   scp ubuntu@your-server-ip:/home/minhqnd/.http-mitm-proxy/certs/ca.pem ~/proxy-ca.pem
+   scp ubuntu@your-server-ip:~/.mitmproxy/mitmproxy-ca-cert.pem ~/mitmproxy-ca.pem
    ```
    Replace `your-server-ip` with your server's IP address.
 
 3. **Trust the CA certificate locally (macOS)**
    ```bash
-   chmod +x scripts/install-ca-remote.sh
-   ./scripts/install-ca-remote.sh ~/proxy-ca.pem
+   sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/mitmproxy-ca.pem
    ```
 
 4. **Configure your local system proxy**
@@ -264,8 +279,6 @@ If running the proxy on a remote server (e.g., EC2) and connecting from your loc
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PROXY_PORT` | `8080` | Listening port for the HTTPS intercept proxy. |
-| `STATUS_PORT` | `9090` | Port for the JSON status endpoint. |
 | `INTERCEPT_DOMAINS` | `example.com` | Comma-separated list of hosts to inject into. Leave empty to intercept every domain (not recommended). |
 | `INJECT_HTML` | Floating banner | HTML snippet appended to the configured selector. |
 | `INJECT_SCRIPT` | _empty_ | Inline JavaScript injected with a CSP nonce. |

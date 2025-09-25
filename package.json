@@ -7,8 +7,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "intercept": "node src/https-interceptor.js",
-    "intercept-dev": "node --watch src/https-interceptor.js"
+    "intercept": "mitmdump -s src/mitmproxy-injector.py --listen-port 8080 --mode regular",
+    "intercept-dev": "mitmdump -s src/mitmproxy-injector.py --listen-port 8080 --mode regular"
   },
   "keywords": [
     "proxy",
@@ -20,7 +20,6 @@
   "dependencies": {
     "cheerio": "^1.0.0-rc.12",
     "express": "^4.19.2",
-  "http-mitm-proxy": "^1.1.0",
     "morgan": "^1.10.0",
     "undici": "^6.20.0"
   }
