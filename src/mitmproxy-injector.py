@@ -29,7 +29,7 @@ ALLOWED_HOSTS = [
 
 # Nếu True thì XOÁ toàn bộ Content-Security-Policy header/meta trước khi inject.
 # Dùng cho test/dev. KHÔNG bật trên proxy công khai.
-STRIP_CSP = True
+STRIP_CSP = False
 
 # HTML snippet sẽ được inject (string). Có thể chứa style inline.
 INJECT_HTML = (
@@ -98,8 +98,9 @@ def add_nonce_to_csp(csp_value: str, nonce: str) -> str:
 
 class Injector:
     def __init__(self):
-        ctx.log.info("Mitmproxy injector initialized (ALLOW_ALL=%s, STRIP_CSP=%s, ALLOWED_HOSTS=%s)",
-                     ALLOW_ALL, STRIP_CSP, ALLOWED_HOSTS)
+        # Use a single formatted string for logging (mitmproxy log methods accept one message)
+        msg = f"Mitmproxy injector initialized (ALLOW_ALL={ALLOW_ALL}, STRIP_CSP={STRIP_CSP}, ALLOWED_HOSTS={ALLOWED_HOSTS})"
+        ctx.log.info(msg)
 
     def response(self, flow: http.HTTPFlow) -> None:
         """
@@ -112,40 +113,40 @@ class Injector:
 
             host = flow.request.pretty_host or ""
             if not host_allowed(host):
-                return  # không cho phép host này
+                return  # host not allowed
 
             ctype = resp.headers.get("content-type", "").lower()
             if "text/html" not in ctype:
-                return  # chỉ xử lý HTML
+                return  # only process HTML
 
-            # Lấy HTML đã giải nén (mitmproxy hỗ trợ)
+            # Get decoded HTML (mitmproxy handles decompression)
             try:
                 html = resp.get_text(strict=False)
             except Exception as e:
-                ctx.log.warn("Could not get text for %s: %s", flow.request.pretty_url, e)
+                ctx.log.warn(f"Could not get text for {flow.request.pretty_url}: {e}")
                 return
 
-            # Parse HTML bằng BeautifulSoup (an toàn hơn replace chuỗi)
+            # Parse HTML with BeautifulSoup
             soup = BeautifulSoup(html, "html.parser")
 
-            # Nếu STRIP_CSP bật: xóa header CSP và meta CSP
+            # If STRIP_CSP: remove header CSP and meta CSP
             if STRIP_CSP:
                 if "content-security-policy" in resp.headers:
                     del resp.headers["content-security-policy"]
                 if "content-security-policy-report-only" in resp.headers:
                     del resp.headers["content-security-policy-report-only"]
-                # xóa meta tags CSP trong HTML
+                # remove meta CSP tags
                 try:
                     metas = soup.find_all("meta", attrs={"http-equiv": lambda v: v and v.lower() == "content-security-policy"})
                     for m in metas:
                         m.decompose()
                 except Exception as e:
-                    ctx.log.warn("Failed to strip meta CSP for %s: %s", host, e)
+                    ctx.log.warn(f"Failed to strip meta CSP for {host}: {e}")
 
-            # Generate nonce cho script inline
+            # Generate nonce for inline script
             nonce = secrets.token_urlsafe(12)
 
-            # Inject HTML snippet vào selector (nếu không tìm thấy thì append vào body hoặc html)
+            # Inject HTML snippet into selector (or fallback to body/html)
             try:
                 snippet = BeautifulSoup(INJECT_HTML, "html.parser")
                 target = soup.select_one(INJECT_SELECTOR)
@@ -157,9 +158,9 @@ class Injector:
                     else:
                         soup.append(snippet)
             except Exception as e:
-                ctx.log.error("Snippet injection error for %s: %s", host, e)
+                ctx.log.error(f"Snippet injection error for {host}: {e}")
 
-            # Inject script tag với nonce
+            # Inject script tag with nonce
             try:
                 script_tag = soup.new_tag("script")
                 script_tag.attrs["nonce"] = nonce
@@ -169,33 +170,33 @@ class Injector:
                 else:
                     soup.append(script_tag)
             except Exception as e:
-                ctx.log.error("Script injection error for %s: %s", host, e)
+                ctx.log.error(f"Script injection error for {host}: {e}")
 
-            # Nếu không strip CSP: cố gắng cập nhật header/meta CSP để thêm nonce (nếu header có)
+            # If not stripping CSP, try to update header/meta CSP to include the nonce
             if not STRIP_CSP:
                 try:
                     csp_header = resp.headers.get("content-security-policy")
                     new_csp = add_nonce_to_csp(csp_header, nonce)
                     resp.headers["content-security-policy"] = new_csp
                 except Exception as e:
-                    ctx.log.warn("Failed to update CSP header for %s: %s", host, e)
+                    ctx.log.warn(f"Failed to update CSP header for {host}: {e}")
 
                 try:
                     meta = soup.find("meta", attrs={"http-equiv": lambda v: v and v.lower() == "content-security-policy"})
                     if meta and meta.has_attr("content"):
                         meta["content"] = add_nonce_to_csp(meta["content"], nonce)
                 except Exception as e:
-                    ctx.log.warn("Failed to update CSP meta for %s: %s", host, e)
+                    ctx.log.warn(f"Failed to update CSP meta for {host}: {e}")
 
-            # Ghi lại HTML đã sửa trở lại response
+            # Write modified HTML back into response
             try:
                 resp.set_text(str(soup))
-                ctx.log.info("Injected into %s %s", host, flow.request.path)
+                ctx.log.info(f"Injected into {host} {flow.request.path}")
             except Exception as e:
-                ctx.log.error("Failed to set modified text for %s: %s", host, e)
+                ctx.log.error(f"Failed to set modified text for {host}: {e}")
 
         except Exception as e:
-            ctx.log.error("Unexpected injection error for %s: %s", getattr(flow.request, "pretty_host", "?"), e)
+            ctx.log.error(f"Unexpected injection error for {getattr(flow.request, 'pretty_host', '?')}: {e}")
 
 addons = [
     Injector()
