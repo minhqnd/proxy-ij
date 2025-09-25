@@ -11,7 +11,7 @@ from mitmproxy import http, ctx
 
 # Config via environment variables (or hardcode for quick test)
 INJECT_HTML = os.environ.get("INJECT_HTML", '<div id="injected-banner" style="position:fixed;right:12px;bottom:12px;padding:8px;background:#0b74de;color:#fff;border-radius:6px;z-index:2147483647">INJECTED</div>')
-INJECT_SCRIPT = os.environ.get("INJECT_SCRIPT", "console.log('injected script');")
+INJECT_SCRIPT = os.environ.get("INJECT_SCRIPT", "alert('injected script');")
 INJECT_SELECTOR = os.environ.get("INJECT_SELECTOR", "body")  # CSS selector to append snippet into; fallback to body
 
 def add_nonce_to_csp(csp_value: str, nonce: str) -> str:
