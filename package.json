@@ -1,27 +1,27 @@
 {
-  "name": "proxy-injector",
+  "name": "content-proxy",
   "version": "1.0.0",
-  "description": "Reverse proxy that injects inline script with nonce into HTML responses",
-  "main": "proxy-inject-nonce.js",
+  "description": "Reverse proxy server that injects custom content into target websites.",
+  "main": "src/server.js",
+  "type": "module",
   "scripts": {
-    "start": "node proxy-inject-nonce.js",
-    "dev": "NODE_ENV=development node proxy-inject-nonce.js",
-    "prod": "NODE_ENV=production node proxy-inject-nonce.js"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "intercept": "node src/https-interceptor.js",
+    "intercept-dev": "node --watch src/https-interceptor.js"
   },
   "keywords": [
+    "proxy",
     "reverse-proxy",
-    "csp",
-    "nonce",
-    "script-injection",
-    "express"
+    "content-injection"
   ],
-  "author": "minhqnd",
+  "author": "",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "undici": "^6.0.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "cheerio": "^1.0.0-rc.12",
+    "express": "^4.19.2",
+  "http-mitm-proxy": "^1.1.0",
+    "morgan": "^1.10.0",
+    "undici": "^6.20.0"
   }
 }

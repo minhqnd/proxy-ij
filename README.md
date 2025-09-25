@@ -1,365 +1,256 @@
-# Proxy Injector
+# Content Management Proxy
 
-A reverse proxy server that forwards requests to https://minhqnd.com and injects inline JavaScript with proper Content Security Policy (CSP) nonce handling.
+A lightweight Node.js proxy toolkit that can run in three modes:
 
-## Features
+- **Reverse proxy** – fetches pages from a target origin (for example `https://example.com`), injects HTML/snippets, and serves the modified response to clients.
+- **Forward HTTP proxy** – (optional) system proxy for plain HTTP traffic that injects content per domain.
+- **HTTPS intercepting proxy** – full man-in-the-middle (MITM) proxy that generates certificates on the fly, decrypts HTTPS responses, and injects custom content before re-encrypting them.
 
-- ✅ Reverse proxy with request forwarding
-- ✅ Inline script injection with CSP nonce support
-- ✅ Automatic compression/decompression handling (gzip, brotli, deflate)
-- ✅ CSP header and meta-tag modification
-- ✅ Health check endpoint for load balancers
-- ✅ Production-ready with PM2 and systemd support
-- ✅ Nginx TLS termination with Let's Encrypt
-- ✅ Security headers and proper error handling
+Use it to preview or control content without touching the origin infrastructure directly.
 
-## Architecture
+## ✨ Features
+
+- **Full reverse proxy** for any HTTP(S) origin.
+- **HTML content injection** using a configurable snippet.
+- **CSP-aware script injection** (uses nonces and updates `Content-Security-Policy`).
+- **Compression aware**: transparently handles Brotli, gzip and deflate payloads.
+- **Simple configuration** via environment variables.
+- **Health check endpoint** for monitoring (`/health`).
+
+## 🧱 Project structure
 
 ```
-Internet → Nginx (TLS) → Node.js Proxy → https://minhqnd.com
-                         ↓
-                    Inject Script + Nonce
-                         ↓
-                    Modify CSP Headers
-                         ↓
-                    Return to Client
+.
+├── package.json
+├── package-lock.json
+├── scripts
+│   └── install-ca-macos.sh
+├── src
+│   ├── https-interceptor.js
+│   └── server.js
+└── README.md
 ```
 
-## Quick Start (Development)
+## ⚙️ Requirements
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+- Node.js 18 or newer (required for native `fetch` / `undici` stream support).
+- npm 9+ (bundled with Node 18).
 
-2. **Run the server:**
-   ```bash
-   npm start
-   # or
-   NODE_ENV=development npm run dev
-   ```
-
-3. **Test the proxy:**
-   ```bash
-   curl http://localhost:3000/health
-   # Visit http://localhost:3000 to see the proxied site with injected button
-   ```
-
-## EC2 Production Deployment
-
-### Prerequisites
-
-- EC2 instance (Ubuntu 22.04 or Amazon Linux 2023)
-- Domain name pointing to EC2 IP (e.g., host.minhqnd.com)
-- Security groups allowing ports 22 (SSH), 80 (HTTP), 443 (HTTPS)
-- (Optional) Cloudflare setup for DNS and CDN
-
-### Automated Deployment
-
-1. **Upload files to EC2:**
-   ```bash
-   scp -i your-key.pem proxy-inject-nonce.js ubuntu@your-ec2-ip:~/
-   scp -i your-key.pem package.json ubuntu@your-ec2-ip:~/
-   scp -i your-key.pem deploy.sh ubuntu@your-ec2-ip:~/
-   ```
-
-2. **Run deployment script:**
-   ```bash
-   ssh -i your-key.pem ubuntu@your-ec2-ip
-   chmod +x deploy.sh
-   ./deploy.sh
-   ```
-
-3. **Setup Nginx with SSL:**
-   ```bash
-   chmod +x setup-nginx.sh
-   ./setup-nginx.sh host.minhqnd.com
-   sudo certbot --nginx -d host.minhqnd.com
-   ```
-
-**Note**: If using Cloudflare, see [CLOUDFLARE-SETUP.md](CLOUDFLARE-SETUP.md) for specific instructions.
-
-### Manual Deployment Steps
-
-<details>
-<summary>Click to expand manual deployment instructions</summary>
-
-#### 1. System Setup
+## 🚀 Local development
 
 ```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install Node.js 18+
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs build-essential
-
-# Install Nginx and Certbot
-sudo apt install -y nginx certbot python3-certbot-nginx
-
-# Install PM2 globally
-sudo npm install -g pm2
-```
-
-#### 2. Application Setup
-
-```bash
-# Create application directory
-mkdir -p /home/ubuntu/proxy-injector
-cd /home/ubuntu/proxy-injector
-
-# Copy your files (package.json, proxy-inject-nonce.js)
 # Install dependencies
 npm install
 
-# Test the application
-node proxy-inject-nonce.js
-# In another terminal: curl http://localhost:3000/health
+# Start the proxy (defaults to https://example.com)
+npm run dev
+
+# Visit through the proxy
+open http://localhost:3000
 ```
 
-#### 3. PM2 Process Management
+By default the reverse proxy forwards to `https://example.com` and injects a small banner at the bottom-right of every HTML page. Modify the environment variables below to adapt it to your needs.
+
+## 🔧 Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Local port to listen on. |
+| `TARGET_ORIGIN` | `https://example.com` | Upstream site you want to proxy and modify. |
+| `INJECTION_HTML` | Banner snippet | HTML snippet appended to every proxied HTML body. You can include inline styles or scripts. |
+
+Use a local `.env` file (ignored by git) or export variables in your shell before starting the server:
 
 ```bash
-# Start with PM2
-pm2 start proxy-inject-nonce.js --name proxy-injector
-
-# Save PM2 configuration
-pm2 save
-
-# Setup PM2 startup script
-pm2 startup systemd
-# Follow the output instructions to run the suggested command
+export TARGET_ORIGIN="https://intranet.yourcompany.com"
+export INJECTION_HTML='<div class="banner">Managed by ACME CMS</div>'
+npm start
 ```
 
-#### 4. Nginx Configuration
+## 🧪 Health check
+
+The proxy exposes `GET /health` which returns JSON containing the current configuration and timestamp. Useful for monitoring or load balancers.
+
+## ☁️ Deploying on Amazon EC2
+
+Below is a simple end-to-end walkthrough for an Ubuntu-based EC2 instance. Adjust commands for other distributions as needed.
+
+1. **SSH into the instance**
+   ```bash
+   ssh -i /path/to/key.pem ubuntu@your-ec2-ip
+   ```
+
+2. **Install Node.js 18 and Git**
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+   sudo apt-get install -y nodejs git
+   ```
+
+3. **Clone your repository** (or copy the project files)
+   ```bash
+   git clone https://github.com/your-org/content-proxy.git
+   cd content-proxy
+   npm install
+   ```
+
+4. **Configure environment variables**
+   Create a `.env` file (same directory) or export variables. Example:
+   ```bash
+   cat <<'EOF' > .env
+   PORT=3000
+   TARGET_ORIGIN="https://example.com"
+   INJECTION_HTML='<div class="banner">Managed by ACME CMS</div>'
+   EOF
+   ```
+
+5. **Run the proxy**
+   ```bash
+   npm start
+   ```
+
+   The service now listens on port 3000 inside the instance.
+
+6. **(Optional) Keep it running with systemd**
+
+   Store environment variables in a dedicated file:
+   ```bash
+   sudo tee /etc/content-proxy.env > /dev/null <<'EOF'
+   PORT=3000
+   TARGET_ORIGIN=https://example.com
+   INJECTION_HTML='<div class="banner">Managed by ACME CMS</div>'
+   EOF
+   ```
+
+   Create a systemd service file:
+   ```bash
+   sudo tee /etc/systemd/system/content-proxy.service > /dev/null <<'EOF'
+   [Unit]
+   Description=Content Management Proxy
+   After=network.target
+
+   [Service]
+   EnvironmentFile=/etc/content-proxy.env
+   WorkingDirectory=/home/ubuntu/content-proxy
+   ExecStart=/usr/bin/npm start
+   Restart=always
+   RestartSec=5
+   User=ubuntu
+
+   [Install]
+   WantedBy=multi-user.target
+   EOF
+
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now content-proxy.service
+   ```
+
+7. **Expose the proxy**
+   - Open security-group ports (e.g. TCP 80/443 or 3000).
+   - Optionally put Nginx in front for TLS termination with Let’s Encrypt.
+
+8. **Verify**
+   ```bash
+   curl http://your-ec2-ip:3000/health
+   ```
+
+### Using Nginx for HTTPS termination (optional)
+
+1. Install Nginx:
+   ```bash
+   sudo apt-get install -y nginx
+   ```
+2. Configure a server block (replace `proxy.example.com` with your domain):
+   ```bash
+   sudo tee /etc/nginx/sites-available/content-proxy > /dev/null <<'EOF'
+   server {
+     listen 80;
+     server_name proxy.example.com;
+
+     location / {
+       proxy_pass http://127.0.0.1:3000;
+       proxy_set_header Host $host;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+     }
+   }
+   EOF
+
+   sudo ln -sf /etc/nginx/sites-available/content-proxy /etc/nginx/sites-enabled/content-proxy
+   sudo systemctl reload nginx
+   ```
+3. Issue a Let’s Encrypt certificate with Certbot:
+   ```bash
+   sudo apt-get install -y certbot python3-certbot-nginx
+   sudo certbot --nginx -d proxy.example.com
+   ```
+
+## 🛡️ HTTPS intercepting proxy (system-wide)
+
+When you need real browsers to connect to the original domain (for example `https://example.com`) while still injecting content, run the HTTPS intercepting proxy. It performs TLS interception, so clients must trust its dynamically generated certificate authority (CA).
+
+### 1. Start the proxy
 
 ```bash
-# Create Nginx site configuration
-sudo cp nginx-proxy.conf /etc/nginx/sites-available/proxy.minhqnd.com
-
-# Enable the site
-sudo ln -s /etc/nginx/sites-available/proxy.minhqnd.com /etc/nginx/sites-enabled/
-
-# Remove default site
-sudo rm /etc/nginx/sites-enabled/default
-
-# Test and reload Nginx
-sudo nginx -t
-sudo systemctl reload nginx
+export INTERCEPT_DOMAINS="example.com,docs.example.com"
+export INJECT_HTML='<div class="banner">Injected over HTTPS 🎯</div>'
+npm run intercept
 ```
 
-#### 5. SSL Certificate
+- The proxy listens on `PROXY_PORT` (defaults to `8080`).
+- A management API lives at `http://localhost:9090/status`.
+- On first launch it creates a CA certificate at `~/.http-mitm-proxy/certs/ca.pem`.
+
+### 2. Trust the CA certificate (macOS)
 
 ```bash
-# Obtain Let's Encrypt certificate
-sudo certbot --nginx -d proxy.minhqnd.com
-
-# Test automatic renewal
-sudo certbot renew --dry-run
+# Run once. Requires sudo and the CA file generated in step 1.
+chmod +x scripts/install-ca-macos.sh
+./scripts/install-ca-macos.sh
 ```
 
-</details>
+Alternatively, import `~/.http-mitm-proxy/certs/ca.pem` using Keychain Access (System keychain → Certificates → drag & drop → set to “Always Trust”).
 
-### Alternative: Systemd Service
+### 3. Configure your system proxy
 
-Instead of PM2, you can use systemd:
+On macOS:
 
 ```bash
-# Copy service file
-sudo cp proxy-injector.service /etc/systemd/system/
-
-# Or use the setup script
-chmod +x setup-systemd.sh
-./setup-systemd.sh ubuntu
-
-# Manual systemd commands
-sudo systemctl daemon-reload
-sudo systemctl enable proxy-injector
-sudo systemctl start proxy-injector
-sudo systemctl status proxy-injector
+networksetup -setwebproxy "Wi-Fi" 127.0.0.1 8080
+networksetup -setsecurewebproxy "Wi-Fi" 127.0.0.1 8080
+networksetup -setwebproxystate "Wi-Fi" on
+networksetup -setsecurewebproxystate "Wi-Fi" on
 ```
 
-## Configuration
-
-### Environment Variables
-
-- `PORT` - Server port (default: 3000)
-- `NODE_ENV` - Environment mode (development/production)
-
-### Target Origin
-
-Edit `proxy-inject-nonce.js` to change the target:
-
-```javascript
-const TARGET_ORIGIN = 'https://minhqnd.com'; // Change this
-```
-
-## How It Works
-
-### Script Injection
-
-The proxy injects a button in the bottom-right corner that displays "Hi!" and shows an alert when clicked:
-
-```javascript
-// Injected script creates a styled button
-const btn = document.createElement('button');
-btn.textContent = 'Hi!';
-btn.addEventListener('click', () => alert('hello'));
-document.body.appendChild(btn);
-```
-
-### CSP Nonce Handling
-
-1. **Generate unique nonce** for each request
-2. **Add nonce attribute** to injected script tag
-3. **Modify CSP headers** to include the nonce
-4. **Handle meta-tag CSP** if present in HTML
-
-Example CSP modification:
-```
-Before: script-src 'self'
-After:  script-src 'self' 'nonce-AbC123XyZ=='
-```
-
-### Compression Handling
-
-The proxy automatically:
-- Removes `accept-encoding` from upstream requests
-- Decompresses gzip/brotli/deflate responses
-- Injects scripts into decompressed HTML
-- Updates `content-length` header
-
-## Monitoring & Troubleshooting
-
-### Health Check
+Replace `"Wi-Fi"` with the correct network service. Remember to turn the proxy **off** afterwards:
 
 ```bash
-curl https://proxy.minhqnd.com/health
+networksetup -setwebproxystate "Wi-Fi" off
+networksetup -setsecurewebproxystate "Wi-Fi" off
 ```
 
-Response:
-```json
-{
-  "status": "healthy",
-  "timestamp": "2025-01-01T12:00:00.000Z",
-  "target": "https://minhqnd.com",
-  "uptime": 3600
-}
-```
+### 4. Browse through the proxy
 
-### Logs
+Open the browser and navigate to any domain covered by `INTERCEPT_DOMAINS`. The proxy will decrypt the traffic, inject your HTML/script (CSP-safe via nonce handling), and return the modified page.
 
-**PM2 logs:**
-```bash
-pm2 logs proxy-injector
-pm2 logs proxy-injector --lines 100
-```
+> ⚠️ **Security warning:** Do NOT distribute the generated CA broadly. Anyone who trusts it allows the proxy to read their HTTPS traffic.
 
-**Systemd logs:**
-```bash
-sudo journalctl -u proxy-injector -f
-sudo journalctl -u proxy-injector --since today
-```
+### Environment variables for intercept mode
 
-**Nginx logs:**
-```bash
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROXY_PORT` | `8080` | Listening port for the HTTPS intercept proxy. |
+| `STATUS_PORT` | `9090` | Port for the JSON status endpoint. |
+| `INTERCEPT_DOMAINS` | `example.com` | Comma-separated list of hosts to inject into. Leave empty to intercept every domain (not recommended). |
+| `INJECT_HTML` | Floating banner | HTML snippet appended to the configured selector. |
+| `INJECT_SCRIPT` | _empty_ | Inline JavaScript injected with a CSP nonce. |
+| `INJECT_SELECTOR` | `body` | CSS selector that should receive the HTML snippet. |
 
-### Common Issues
+## 🧭 Next steps
 
-**1. Script not injecting:**
-- Check if response is `text/html`
-- Verify CSP headers in Network tab
-- Check browser console for CSP violations
+- Add authentication to protect any proxy mode you expose publicly.
+- Persist different snippets per path or domain.
+- Automate certificate deployment for larger teams (e.g., via MDM).
 
-**2. CSP blocking script:**
-- Ensure nonce is properly added to CSP header
-- Check for meta-tag CSP conflicts
-- Verify script has correct nonce attribute
+## 📄 License
 
-**3. Compression issues:**
-- Verify upstream response is properly decompressed
-- Check `content-length` header matches body size
-
-**4. SSL certificate issues:**
-```bash
-sudo certbot renew --dry-run
-sudo systemctl status certbot.timer
-```
-
-### Performance Monitoring
-
-**PM2 monitoring:**
-```bash
-pm2 monit
-pm2 show proxy-injector
-```
-
-**System resources:**
-```bash
-htop
-iostat -x 1
-netstat -tlnp | grep :3000
-```
-
-## Security Considerations
-
-### Production Security
-
-1. **Use nonce-based CSP** instead of `'unsafe-inline'`
-2. **Keep SSL certificates updated** with automatic renewal
-3. **Monitor logs** for unusual activity
-4. **Use firewall rules** to restrict access
-5. **Regular security updates** for system packages
-
-### Legal & Ethical Notes
-
-- Only use this proxy for domains you own or have permission to modify
-- Consider server-side injection instead of MITM for production applications
-- Respect target site's terms of service and robots.txt
-- Implement rate limiting for production use
-
-## File Structure
-
-```
-proxy-injector/
-├── proxy-inject-nonce.js      # Main application
-├── package.json               # Dependencies and scripts
-├── deploy.sh                  # Automated deployment script
-├── setup-nginx.sh             # Nginx configuration script
-├── setup-systemd.sh           # Systemd service setup
-├── nginx-proxy.conf           # Nginx configuration template
-├── proxy-injector.service     # Systemd service file
-└── README.md                  # This file
-```
-
-## Development
-
-### Testing Locally
-
-1. Start the proxy server
-2. Visit `http://localhost:3000`
-3. Look for the "Hi!" button in bottom-right corner
-4. Check browser DevTools for CSP headers and console logs
-
-### Adding Features
-
-- **Rate limiting:** Add express-rate-limit middleware
-- **Caching:** Implement response caching with Redis
-- **Logging:** Add structured logging with Winston
-- **Monitoring:** Add Prometheus metrics
-- **Multiple targets:** Support routing to different origins
-
-## License
-
-MIT License - feel free to use and modify for your own projects.
-
-## Support
-
-For issues and questions:
-- Check the troubleshooting section above
-- Review application and nginx logs
-- Test with curl commands for debugging
-- Verify DNS and SSL certificate status
+MIT
