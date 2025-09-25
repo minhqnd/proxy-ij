@@ -188,49 +188,75 @@ Below is a simple end-to-end walkthrough for an Ubuntu-based EC2 instance. Adjus
 
 When you need real browsers to connect to the original domain (for example `https://example.com`) while still injecting content, run the HTTPS intercepting proxy. It performs TLS interception, so clients must trust its dynamically generated certificate authority (CA).
 
-### 1. Start the proxy
+### Local proxy setup
 
-```bash
-export INTERCEPT_DOMAINS="example.com,docs.example.com"
-export INJECT_HTML='<div class="banner">Injected over HTTPS 🎯</div>'
-npm run intercept
-```
+If running the proxy on your local machine:
 
-- The proxy listens on `PROXY_PORT` (defaults to `8080`).
-- A management API lives at `http://localhost:9090/status`.
-- On first launch it creates a CA certificate at `~/.http-mitm-proxy/certs/ca.pem`.
+1. **Start the proxy**
+   ```bash
+   export INTERCEPT_DOMAINS="example.com,docs.example.com"
+   export INJECT_HTML='<div class="banner">Injected over HTTPS 🎯</div>'
+   npm run intercept
+   ```
 
-### 2. Trust the CA certificate (macOS)
+2. **Trust the CA certificate (macOS)**
+   ```bash
+   chmod +x scripts/install-ca-macos.sh
+   ./scripts/install-ca-macos.sh
+   ```
 
-```bash
-# Run once. Requires sudo and the CA file generated in step 1.
-chmod +x scripts/install-ca-macos.sh
-./scripts/install-ca-macos.sh
-```
+3. **Configure your system proxy**
+   ```bash
+   networksetup -setwebproxy "Wi-Fi" 127.0.0.1 8080
+   networksetup -setsecurewebproxy "Wi-Fi" 127.0.0.1 8080
+   networksetup -setwebproxystate "Wi-Fi" on
+   networksetup -setsecurewebproxystate "Wi-Fi" on
+   ```
 
-Alternatively, import `~/.http-mitm-proxy/certs/ca.pem` using Keychain Access (System keychain → Certificates → drag & drop → set to “Always Trust”).
+4. **Browse through the proxy**
+   Open the browser and navigate to any domain covered by `INTERCEPT_DOMAINS`.
 
-### 3. Configure your system proxy
+### Remote proxy setup (server-based)
 
-On macOS:
+If running the proxy on a remote server (e.g., EC2) and connecting from your local machine:
 
-```bash
-networksetup -setwebproxy "Wi-Fi" 127.0.0.1 8080
-networksetup -setsecurewebproxy "Wi-Fi" 127.0.0.1 8080
-networksetup -setwebproxystate "Wi-Fi" on
-networksetup -setsecurewebproxystate "Wi-Fi" on
-```
+1. **Start the proxy on the server**
+   SSH into your server and run:
+   ```bash
+   export INTERCEPT_DOMAINS="example.com"
+   npm run intercept
+   ```
+   Use PM2 or systemd to keep it running in the background.
 
-Replace `"Wi-Fi"` with the correct network service. Remember to turn the proxy **off** afterwards:
+2. **Copy the CA certificate to your local machine**
+   ```bash
+   scp ubuntu@your-server-ip:/home/minhqnd/.http-mitm-proxy/certs/ca.pem ~/proxy-ca.pem
+   ```
+   Replace `your-server-ip` with your server's IP address.
 
-```bash
-networksetup -setwebproxystate "Wi-Fi" off
-networksetup -setsecurewebproxystate "Wi-Fi" off
-```
+3. **Trust the CA certificate locally (macOS)**
+   ```bash
+   chmod +x scripts/install-ca-remote.sh
+   ./scripts/install-ca-remote.sh ~/proxy-ca.pem
+   ```
 
-### 4. Browse through the proxy
+4. **Configure your local system proxy**
+   Point to the server's proxy port:
+   ```bash
+   networksetup -setwebproxy "Wi-Fi" your-server-ip 8080
+   networksetup -setsecurewebproxy "Wi-Fi" your-server-ip 8080
+   networksetup -setwebproxystate "Wi-Fi" on
+   networksetup -setsecurewebproxystate "Wi-Fi" on
+   ```
 
-Open the browser and navigate to any domain covered by `INTERCEPT_DOMAINS`. The proxy will decrypt the traffic, inject your HTML/script (CSP-safe via nonce handling), and return the modified page.
+5. **Browse through the proxy**
+   Open your browser and navigate to `https://example.com`. The proxy will intercept and inject content.
+
+6. **Turn off the proxy when done**
+   ```bash
+   networksetup -setwebproxystate "Wi-Fi" off
+   networksetup -setsecurewebproxystate "Wi-Fi" off
+   ```
 
 > ⚠️ **Security warning:** Do NOT distribute the generated CA broadly. Anyone who trusts it allows the proxy to read their HTTPS traffic.
 
