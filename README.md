@@ -50,8 +50,9 @@ Internet → Nginx (TLS) → Node.js Proxy → https://minhqnd.com
 ### Prerequisites
 
 - EC2 instance (Ubuntu 22.04 or Amazon Linux 2023)
-- Domain name pointing to EC2 IP (e.g., proxy.minhqnd.com)
+- Domain name pointing to EC2 IP (e.g., host.minhqnd.com)
 - Security groups allowing ports 22 (SSH), 80 (HTTP), 443 (HTTPS)
+- (Optional) Cloudflare setup for DNS and CDN
 
 ### Automated Deployment
 
@@ -72,9 +73,11 @@ Internet → Nginx (TLS) → Node.js Proxy → https://minhqnd.com
 3. **Setup Nginx with SSL:**
    ```bash
    chmod +x setup-nginx.sh
-   ./setup-nginx.sh proxy.minhqnd.com
-   sudo certbot --nginx -d proxy.minhqnd.com
+   ./setup-nginx.sh host.minhqnd.com
+   sudo certbot --nginx -d host.minhqnd.com
    ```
+
+**Note**: If using Cloudflare, see [CLOUDFLARE-SETUP.md](CLOUDFLARE-SETUP.md) for specific instructions.
 
 ### Manual Deployment Steps
 

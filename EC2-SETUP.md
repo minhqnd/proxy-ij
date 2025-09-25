@@ -28,14 +28,14 @@ All traffic   All         All           0.0.0.0/0     Allow outbound
 
 ### **1. Domain Setup:**
 ```bash
-# Point your domain to EC2
-proxy.minhqnd.com   A    YOUR_EC2_PUBLIC_IP
+# Your domain already points to EC2 via Cloudflare
+host.minhqnd.com   A    YOUR_EC2_PUBLIC_IP (via Cloudflare)
 ```
 
 ### **2. Verify DNS:**
 ```bash
-nslookup proxy.minhqnd.com
-dig proxy.minhqnd.com
+nslookup host.minhqnd.com
+dig host.minhqnd.com
 ```
 
 ## ⚙️ **Deployment Commands**
@@ -65,8 +65,8 @@ chmod +x deploy.sh
 
 ### **4. Setup Nginx + SSL:**
 ```bash
-./setup-nginx.sh proxy.minhqnd.com
-sudo certbot --nginx -d proxy.minhqnd.com
+./setup-nginx.sh host.minhqnd.com
+sudo certbot --nginx -d host.minhqnd.com
 ```
 
 ## 🔍 **Testing Setup**
@@ -78,18 +78,18 @@ curl http://your-ec2-ip:3000/health
 
 ### **2. Test Nginx:**
 ```bash
-curl http://proxy.minhqnd.com/health
+curl http://host.minhqnd.com/health
 ```
 
 ### **3. Test HTTPS:**
 ```bash
-curl https://proxy.minhqnd.com/health
+curl https://host.minhqnd.com/health
 ```
 
 ### **4. Test Proxy:**
 ```bash
 # Should show minhqnd.com content with injected button
-curl -v https://proxy.minhqnd.com/
+curl -v https://host.minhqnd.com/
 ```
 
 ## 🛠️ **Manual Port Configuration**
@@ -151,7 +151,7 @@ sudo firewall-cmd --reload
 - Check dependencies: `npm install`
 
 **3. SSL certificate issues:**
-- Verify domain points to correct IP: `nslookup proxy.minhqnd.com`
+- Verify domain points to correct IP: `nslookup host.minhqnd.com`
 - Check certbot logs: `sudo tail -f /var/log/letsencrypt/letsencrypt.log`
 - Ensure port 80 is accessible for ACME challenge
 

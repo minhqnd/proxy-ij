@@ -3,7 +3,7 @@
 
 set -e
 
-DOMAIN=${1:-proxy.minhqnd.com}
+DOMAIN=${1:-host.minhqnd.com}
 APP_PORT=${2:-3000}
 
 echo "🌐 Setting up Nginx for domain: $DOMAIN"
@@ -71,7 +71,7 @@ echo ""
 echo "✅ Nginx setup completed!"
 echo ""
 echo "📋 Next steps:"
-echo "1. Make sure your domain $DOMAIN points to this server's IP"
+echo "1. Make sure your domain $DOMAIN points to this server's IP (already done via Cloudflare)"
 echo "2. Test HTTP access: curl -I http://$DOMAIN/health"
 echo "3. Obtain SSL certificate: sudo certbot --nginx -d $DOMAIN"
 echo "4. After SSL setup, the configuration will be automatically updated"
