@@ -36,99 +36,12 @@ STRIP_CSP = True
 # ----------------------------
 
 INJECT_HTML = (
-    '<div id="mini-browser-root" aria-hidden="true" '
-    'style="position:fixed;right:16px;bottom:16px;z-index:2147483647;font-family:Arial,Helvetica,sans-serif">'
-    '  <button id="mini-browser-toggle" title="Show mini browser" '
-    '    style="all:unset;cursor:pointer;background:#0b74de;color:#fff;padding:8px 10px;border-radius:8px;'
-    '    box-shadow:0 6px 14px rgba(11,116,222,0.25);font-weight:600">☰</button>'
+    '<div style="position:fixed;bottom:16px;right:16px;z-index:2147483647;padding:12px 16px;background:#111;color:#fff;border-radius:8px;font-family:sans-serif;font-size:14px;box-shadow:0 6px 16px rgba(0,0,0,0.35);">'
+    'Injected'
     '</div>'
 )
 
-INJECT_SCRIPT = (
-    "/* mini-browser widget script */\n"
-    "(function(){\n"
-    "  try{\n"
-    "    if(window.__MINI_BROWSER_LOADED) return; window.__MINI_BROWSER_LOADED = true;\n"
-    "    const root = document.getElementById('mini-browser-root');\n"
-    "    if(!root) return;\n"
-    "\n"
-    "    // Create panel (hidden by default)\n"
-    "    const panel = document.createElement('div');\n"
-    "    panel.id = 'mini-browser-panel';\n"
-    "    panel.style.cssText = 'display:none;width:420px;height:300px;position:fixed;right:16px;bottom:56px;"
-    "background:rgba(255,255,255,0.98);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.3);"
-    "overflow:hidden;backdrop-filter:blur(4px);z-index:2147483647;border:1px solid rgba(0,0,0,0.08)';\n"
-    "\n"
-    "    // header\n"
-    "    const header = document.createElement('div');\n"
-    "    header.style.cssText = 'display:flex;gap:8px;align-items:center;padding:8px;background:linear-gradient(90deg,#f7f8fb,#fff);border-bottom:1px solid rgba(0,0,0,0.04)';\n"
-    "    const backBtn = document.createElement('button'); backBtn.textContent='◀'; backBtn.title='Back';\n"
-    "    const fwdBtn = document.createElement('button'); fwdBtn.textContent='▶'; fwdBtn.title='Forward';\n"
-    "    const urlInput = document.createElement('input'); urlInput.type='text'; urlInput.placeholder='https://example.com';\n"
-    "    const goBtn = document.createElement('button'); goBtn.textContent='Go'; goBtn.title='Go to URL';\n"
-    "    const openBtn = document.createElement('button'); openBtn.textContent='Open'; openBtn.title='Open in new tab';\n"
-    "    const closeBtn = document.createElement('button'); closeBtn.textContent='✕'; closeBtn.title='Close';\n"
-    "\n"
-    "    // tiny style for controls\n"
-    "    [backBtn,fwdBtn,goBtn,openBtn,closeBtn].forEach(b=>{ b.style.cssText='padding:6px 8px;border-radius:6px;border:none;background:#eef2ff;cursor:pointer'; b.onmousedown=e=>e.stopPropagation(); });\n"
-    "    urlInput.style.cssText='flex:1;padding:6px 8px;border-radius:6px;border:1px solid #dfe7ff;outline:none';\n"
-    "    header.append(backBtn,fwdBtn,urlInput,goBtn,openBtn,closeBtn);\n"
-    "\n"
-    "    // iframe container and iframe\n"
-    "    const frameWrap = document.createElement('div');\n"
-    "    frameWrap.style.cssText='width:100%;height:calc(100% - 48px);background:#fff;';\n"
-    "    const iframe = document.createElement('iframe');\n"
-    "    iframe.style.cssText='width:100%;height:100%;border:0;display:block;';\n"
-    "    iframe.setAttribute('sandbox','allow-scripts allow-forms allow-same-origin allow-popups');\n"
-    "    frameWrap.appendChild(iframe);\n"
-    "\n"
-    "    panel.appendChild(header); panel.appendChild(frameWrap);\n"
-    "    document.body.appendChild(panel);\n"
-    "\n"
-    "    // Toggle button behavior (root already has toggle button)\n"
-    "    const toggle = document.getElementById('mini-browser-toggle');\n"
-    "    let visible = false;\n"
-    "    const historyStack = [];\n    const forwardStack = [];\n"
-    "\n"
-    "    function show(){ panel.style.display='block'; root.setAttribute('aria-hidden','false'); visible=true; }\n"
-    "    function hide(){ panel.style.display='none'; root.setAttribute('aria-hidden','true'); visible=false; }\n"
-    "\n"
-    "    toggle.addEventListener('click', function(){ if(visible) hide(); else show(); });\n"
-    "\n"
-    "    // navigation helpers\n"
-    "    function normalizeUrl(u){ try{ if(!u) return ''; if(u.startsWith('http://')||u.startsWith('https://')) return u; return 'https://'+u; }catch(e){return u;} }\n"
-    "    function navigateTo(u, pushHistory=true){ const url=normalizeUrl(u); if(!url) return; try{ iframe.src = url; urlInput.value = url; if(pushHistory){ if(historyStack.length===0 || historyStack[historyStack.length-1] !== url){ historyStack.push(url); forwardStack.length=0; } } }catch(e){console.error(e);} }\n"
-    "\n"
-    "    backBtn.addEventListener('click', function(){ if(historyStack.length>1){ const cur = historyStack.pop(); forwardStack.push(cur); const prev = historyStack[historyStack.length-1]; navigateTo(prev, false); } });\n"
-    "    fwdBtn.addEventListener('click', function(){ if(forwardStack.length){ const next = forwardStack.pop(); navigateTo(next, false); historyStack.push(next); } });\n"
-    "    goBtn.addEventListener('click', function(){ navigateTo(urlInput.value); });\n"
-    "    urlInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){ navigateTo(urlInput.value); } });\n"
-    "    openBtn.addEventListener('click', function(){ const u = normalizeUrl(urlInput.value); if(u) window.open(u, '_blank'); });\n"
-    "    closeBtn.addEventListener('click', function(){ hide(); });\n"
-    "\n"
-    "    // convenience: clicking the toggle shorter (double click opens google)\n"
-    "    toggle.addEventListener('dblclick', function(){ navigateTo('https://www.google.com'); show(); });\n"
-    "\n"
-    "    // start with Google loaded (but keep it lazy: only load when panel first shown)\n"
-    "    let initiated = false;\n"
-    "    function ensureInit(){ if(initiated) return; initiated=true; navigateTo('https://www.google.com'); }\n"
-    "    toggle.addEventListener('click', ensureInit, { once:true });\n"
-    "\n"
-    "    // handle iframe load errors: show a small overlay message\n"
-    "    iframe.addEventListener('load', function(){ /* clear any error overlay */ });\n"
-    "    iframe.addEventListener('error', function(){ console.warn('iframe load error'); });\n"
-    "\n"
-    "    // small drag support for panel (optional)\n"
-    "    (function(){ let dragging=false, ox=0, oy=0; header.style.cursor='grab'; header.addEventListener('mousedown', function(e){ dragging=true; ox=e.clientX; oy=e.clientY; header.style.cursor='grabbing'; e.preventDefault(); }); window.addEventListener('mousemove', function(e){ if(!dragging) return; const dx=e.clientX-ox, dy=e.clientY-oy; const rect=panel.getBoundingClientRect(); panel.style.right='auto'; panel.style.bottom='auto'; panel.style.left=Math.max(8, rect.left+dx)+'px'; panel.style.top=Math.max(8, rect.top+dy)+'px'; ox=e.clientX; oy=e.clientY; }); window.addEventListener('mouseup', function(){ if(dragging){ dragging=false; header.style.cursor='grab'; } }); })();\n"
-    "\n"
-    "    // make buttons look nicer via small inline style injection\n"
-    "    (function(){ const style = document.createElement('style'); style.textContent = '\\n'"
-    "      + '#mini-browser-panel button{background:#eef2ff;border:1px solid rgba(11,116,222,0.08);padding:6px 8px;border-radius:6px}\\n'\n"
-    "      + '#mini-browser-panel input{font-size:13px}\\n'; document.head.appendChild(style); })();\n"
-    "\n"
-    "  }catch(err){ console.error('mini-browser init error', err); }\n"
-    "})();\n"
-)
+INJECT_SCRIPT = ""  # Không cần script phức tạp, chỉ inject HTML đơn giản
 
 # ----------------------------
 # End of widget code
