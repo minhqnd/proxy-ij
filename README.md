@@ -1,35 +1,24 @@
-# Content Management Proxy
+# Content Injection Proxy (Mitmproxy-only)
 
-A lightweight Node.js proxy toolkit that can run in three modes:
-
-- **Reverse proxy** – fetches pages from a target origin (for example `https://example.com`), injects HTML/snippets, and serves the modified response to clients.
-- **Forward HTTP proxy** – (optional) system proxy for plain HTTP traffic that injects content per domain.
-- **HTTPS intercepting proxy** – full man-in-the-middle (MITM) proxy that generates certificates on the fly, decrypts HTTPS responses, and injects custom content before re-encrypting them.
-
-Use it to preview or control content without touching the origin infrastructure directly.
+This project uses Mitmproxy to perform HTTPS interception (MITM) and inject custom HTML/JS into webpages on the fly. It provides a small Python addon and simple run scripts.
 
 ## ✨ Features
 
-- **Full reverse proxy** for any HTTP(S) origin.
-- **HTML content injection** using a configurable snippet.
-- **CSP-aware script injection** (uses nonces and updates `Content-Security-Policy`).
-- **Compression aware**: transparently handles Brotli, gzip and deflate payloads.
-- **HTTPS interception** using Mitmproxy for man-in-the-middle capabilities.
-- **Simple configuration** via environment variables.
-- **Health check endpoint** for monitoring (`/health`).
+- HTTPS interception via Mitmproxy (HTTP/1.1, HTTP/2, WebSockets)
+- HTML content injection using a configurable snippet
+- CSP-aware script injection (nonces handled automatically)
+- Simple configuration via environment variables
 
 ## 🧱 Project structure
 
 ```
 .
 ├── package.json
-├── package-lock.json
+├── requirements.txt            # Python deps: mitmproxy, bs4
 ├── scripts
-│   └── install-ca-macos.sh
+│   └── install-ca-macos.sh     # Helper to trust Mitmproxy CA on macOS
 ├── src
-│   ├── https-interceptor.js  # Legacy (replaced by mitmproxy-injector.py)
-│   ├── mitmproxy-injector.py # Mitmproxy addon for HTTPS interception
-│   └── server.js
+│   └── mitmproxy-injector.py   # Mitmproxy addon for HTTPS interception
 └── README.md
 ```
 
@@ -42,86 +31,69 @@ Use it to preview or control content without touching the origin infrastructure 
 
 ## 🚀 Local development
 
-```bash
-# Install dependencies
-npm install
-
-# Start the proxy (defaults to https://example.com)
-npm run dev
-
-# Visit through the proxy
-open http://localhost:3000
-```
-
-By default the reverse proxy forwards to `https://example.com` and injects a small banner at the bottom-right of every HTML page. Modify the environment variables below to adapt it to your needs.
+See Quick start. This project now uses Mitmproxy exclusively for interception; there is no separate Node.js reverse proxy server.
 
 ## 🔧 Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Local port to listen on. |
-| `TARGET_ORIGIN` | `https://example.com` | Upstream site you want to proxy and modify. |
-| `INJECTION_HTML` | Banner snippet | HTML snippet appended to every proxied HTML body. You can include inline styles or scripts. |
+| `INTERCEPT_DOMAINS` | `example.com` | Comma-separated list of hosts to inject into. Leave empty to inject everywhere. |
+| `INJECT_HTML` | Floating banner | HTML snippet appended to the configured selector. |
+| `INJECT_SCRIPT` | _empty_ | Inline JavaScript injected with a CSP nonce. |
+| `INJECT_SELECTOR` | `body` | CSS selector to inject into. |
 
-Use a local `.env` file (ignored by git) or export variables in your shell before starting the server:
+Set environment variables as needed before running mitmdump (see Quick start above).
 
-```bash
-export TARGET_ORIGIN="https://intranet.yourcompany.com"
-export INJECTION_HTML='<div class="banner">Managed by ACME CMS</div>'
-npm start
-```
+<!-- Health check removed: Mitmproxy provides its own web UI via mitmweb if needed. -->
 
-## 🧪 Health check
+## ☁️ Deploying HTTPS Intercepting Proxy on Amazon EC2
 
-The proxy exposes `GET /health` which returns JSON containing the current configuration and timestamp. Useful for monitoring or load balancers.
-
-## ☁️ Deploying on Amazon EC2
-
-Below is a simple end-to-end walkthrough for an Ubuntu-based EC2 instance. Adjust commands for other distributions as needed.
+Below is a simple end-to-end walkthrough for deploying the HTTPS intercepting proxy on an Ubuntu-based EC2 instance. This sets up the proxy server that clients can connect to for MITM HTTPS interception.
 
 1. **SSH into the instance**
    ```bash
    ssh -i /path/to/key.pem ubuntu@your-ec2-ip
    ```
 
-2. **Install Node.js 18 and Git**
+2. **Install Python and Mitmproxy**
    ```bash
-   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-   sudo apt-get install -y nodejs git
+   sudo apt-get update
+   sudo apt-get install -y python3 python3-pip git
+   
+   # Install Mitmproxy
+   sudo pip3 install mitmproxy
    ```
 
 3. **Clone your repository** (or copy the project files)
    ```bash
    git clone https://github.com/your-org/content-proxy.git
    cd content-proxy
-   npm install
+   # No Node install required for mitmproxy-only mode
    ```
 
 4. **Configure environment variables**
    Create a `.env` file (same directory) or export variables. Example:
    ```bash
    cat <<'EOF' > .env
-   PORT=3000
-   TARGET_ORIGIN="https://example.com"
-   INJECTION_HTML='<div class="banner">Managed by ACME CMS</div>'
+   INTERCEPT_DOMAINS="example.com,docs.example.com"
+   INJECT_HTML='<div class="banner">Injected by EC2 Proxy</div>'
    EOF
    ```
 
 5. **Run the proxy**
    ```bash
-   npm start
+   npm run intercept
    ```
 
-   The service now listens on port 3000 inside the instance.
+   The proxy now listens on port 8080 inside the instance for HTTPS interception.
 
 6. **(Optional) Keep it running with systemd**
 
    Store environment variables in a dedicated file:
    ```bash
    sudo tee /etc/content-proxy.env > /dev/null <<'EOF'
-   PORT=3000
-   TARGET_ORIGIN=https://example.com
-   INJECTION_HTML='<div class="banner">Managed by ACME CMS</div>'
+   INTERCEPT_DOMAINS=example.com
+   INJECT_HTML='<div class="banner">Managed by ACME CMS</div>'
    EOF
    ```
 
@@ -129,13 +101,13 @@ Below is a simple end-to-end walkthrough for an Ubuntu-based EC2 instance. Adjus
    ```bash
    sudo tee /etc/systemd/system/content-proxy.service > /dev/null <<'EOF'
    [Unit]
-   Description=Content Management Proxy
+   Description=HTTPS Intercepting Proxy
    After=network.target
 
    [Service]
    EnvironmentFile=/etc/content-proxy.env
    WorkingDirectory=/home/ubuntu/content-proxy
-   ExecStart=/usr/bin/npm start
+   ExecStart=/usr/bin/npm run intercept
    Restart=always
    RestartSec=5
    User=ubuntu
@@ -148,45 +120,40 @@ Below is a simple end-to-end walkthrough for an Ubuntu-based EC2 instance. Adjus
    sudo systemctl enable --now content-proxy.service
    ```
 
-7. **Expose the proxy**
-   - Open security-group ports (e.g. TCP 80/443 or 3000).
-   - Optionally put Nginx in front for TLS termination with Let’s Encrypt.
+7. **Expose the proxy port**
+   - Open security-group ports (TCP 8080) in your EC2 security group.
+   - Clients will connect to `your-ec2-ip:8080` as their proxy server.
 
-8. **Verify**
+8. **Copy CA certificate to your local machine**
+   After starting the proxy, the CA is generated at `~/.mitmproxy/mitmproxy-ca-cert.pem` on the server. Copy it:
    ```bash
-   curl http://your-ec2-ip:3000/health
+   scp ubuntu@your-ec2-ip:~/.mitmproxy/mitmproxy-ca-cert.pem ~/ec2-ca.pem
    ```
 
-### Using Nginx for HTTPS termination (optional)
-
-1. Install Nginx:
+9. **Install CA locally and configure client proxy**
+   On your local machine:
    ```bash
-   sudo apt-get install -y nginx
+   # Install CA (macOS example)
+   sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/ec2-ca.pem
+   
+   # Configure system proxy
+   networksetup -setwebproxy "Wi-Fi" your-ec2-ip 8080
+   networksetup -setsecurewebproxy "Wi-Fi" your-ec2-ip 8080
+   networksetup -setwebproxystate "Wi-Fi" on
+   networksetup -setsecurewebproxystate "Wi-Fi" on
    ```
-2. Configure a server block (replace `proxy.example.com` with your domain):
-   ```bash
-   sudo tee /etc/nginx/sites-available/content-proxy > /dev/null <<'EOF'
-   server {
-     listen 80;
-     server_name proxy.example.com;
 
-     location / {
-       proxy_pass http://127.0.0.1:3000;
-       proxy_set_header Host $host;
-       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-       proxy_set_header X-Forwarded-Proto $scheme;
-     }
-   }
-   EOF
+10. **Test the setup**
+    ```bash
+    curl --proxy your-ec2-ip:8080 --max-time 10 https://example.com
+    ```
+    Should return HTML with injected content. Open a browser to `https://example.com` to see the injection in action.
 
-   sudo ln -sf /etc/nginx/sites-available/content-proxy /etc/nginx/sites-enabled/content-proxy
-   sudo systemctl reload nginx
-   ```
-3. Issue a Let’s Encrypt certificate with Certbot:
-   ```bash
-   sudo apt-get install -y certbot python3-certbot-nginx
-   sudo certbot --nginx -d proxy.example.com
-   ```
+11. **Turn off proxy when done**
+    ```bash
+    networksetup -setwebproxystate "Wi-Fi" off
+    networksetup -setsecurewebproxystate "Wi-Fi" off
+    ```
 
 ## 🛡️ HTTPS intercepting proxy (system-wide)
 

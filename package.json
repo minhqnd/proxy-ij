@@ -1,14 +1,10 @@
 {
   "name": "content-proxy",
   "version": "1.0.0",
-  "description": "Reverse proxy server that injects custom content into target websites.",
-  "main": "src/server.js",
-  "type": "module",
+  "description": "Mitmproxy-based HTTPS interception with HTML/JS injection.",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
     "intercept": "mitmdump -s src/mitmproxy-injector.py --listen-port 8080 --mode regular",
-    "intercept-dev": "mitmdump -s src/mitmproxy-injector.py --listen-port 8080 --mode regular"
+    "mitmweb": "mitmweb -s src/mitmproxy-injector.py --listen-port 8080 --mode regular"
   },
   "keywords": [
     "proxy",
@@ -17,10 +13,5 @@
   ],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "cheerio": "^1.0.0-rc.12",
-    "express": "^4.19.2",
-    "morgan": "^1.10.0",
-    "undici": "^6.20.0"
-  }
+  "dependencies": {}
 }

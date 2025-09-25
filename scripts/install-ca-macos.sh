@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CA_PATH="${1:-$HOME/.http-mitm-proxy/certs/ca.pem}"
+CA_PATH="${1:-$HOME/.mitmproxy/mitmproxy-ca-cert.pem}"
 
 if [[ ! -f "${CA_PATH}" ]]; then
   echo "[error] CA certificate not found at ${CA_PATH}."
-  echo "Generate it by running the HTTPS intercepting proxy at least once."
+  echo "Generate it by running mitmdump/mitmproxy at least once, or visit http://mitm.it while it runs."
   exit 1
 fi
 
