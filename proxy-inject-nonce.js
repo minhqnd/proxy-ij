@@ -8,9 +8,12 @@ const crypto = require('crypto');
 const app = express();
 
 // CONFIG
-const TARGET_ORIGIN = 'https://minhqnd.com'; // upstream origin
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Domains to inject script into (add more as needed)
+const INJECT_DOMAINS = ['example.com', 'www.example.com', 'minhqnd.com'];
+const DEFAULT_TARGET = 'https://example.com'; // Default when no host specified
 
 // util: generate base64 nonce
 function randomNonce(len = 12) {
@@ -75,7 +78,9 @@ app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    target: TARGET_ORIGIN,
+    type: 'generic-proxy-with-injection',
+    inject_domains: INJECT_DOMAINS,
+    default_target: DEFAULT_TARGET,
     uptime: process.uptime()
   });
 });
@@ -202,7 +207,9 @@ process.on('SIGINT', () => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Proxy injector (nonce) listening on ${PORT}, forwarding to ${TARGET_ORIGIN}`);
+  console.log(`Generic proxy server listening on ${PORT}`);
+  console.log(`Default target: ${DEFAULT_TARGET}`);
+  console.log(`Script injection enabled for: ${INJECT_DOMAINS.join(', ')}`);
   console.log(`Environment: ${NODE_ENV}`);
   console.log(`Health check available at: http://localhost:${PORT}/health`);
 });
