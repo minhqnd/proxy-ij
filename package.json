@@ -1,0 +1,27 @@
+{
+  "name": "proxy-injector",
+  "version": "1.0.0",
+  "description": "Reverse proxy that injects inline script with nonce into HTML responses",
+  "main": "proxy-inject-nonce.js",
+  "scripts": {
+    "start": "node proxy-inject-nonce.js",
+    "dev": "NODE_ENV=development node proxy-inject-nonce.js",
+    "prod": "NODE_ENV=production node proxy-inject-nonce.js"
+  },
+  "keywords": [
+    "reverse-proxy",
+    "csp",
+    "nonce",
+    "script-injection",
+    "express"
+  ],
+  "author": "minhqnd",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "undici": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
