@@ -123,6 +123,15 @@ class Injector:
             # Parse HTML with BeautifulSoup
             soup = BeautifulSoup(html, "html.parser")
 
+            # Remove disable-devtool scripts
+            try:
+                scripts = soup.find_all("script", src=lambda x: x and "disable-devtool" in x)
+                for script in scripts:
+                    script.decompose()
+                    ctx.log.info(f"Removed disable-devtool script from {host}")
+            except Exception as e:
+                ctx.log.warn(f"Failed to remove disable-devtool script for {host}: {e}")
+
             # If STRIP_CSP: remove header CSP and meta CSP
             if STRIP_CSP:
                 if "content-security-policy" in resp.headers:
