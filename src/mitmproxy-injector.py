@@ -19,7 +19,7 @@ from mitmproxy import http, ctx
 # ----------------------------
 
 # Nếu ALLOW_ALL=True thì inject mọi host; nếu False chỉ inject các host trong ALLOWED_HOSTS
-ALLOW_ALL = true
+ALLOW_ALL = True
 
 # Danh sách host (chứa substring) được phép inject, ví dụ: "minhqnd.com", "localhost"
 ALLOWED_HOSTS = [
@@ -29,7 +29,7 @@ ALLOWED_HOSTS = [
 
 # Nếu True thì XOÁ toàn bộ Content-Security-Policy header/meta trước khi inject.
 # Dùng cho test/dev. KHÔNG bật trên proxy công khai.
-STRIP_CSP = true
+STRIP_CSP = True
 
 # HTML snippet sẽ được inject (string). Có thể chứa style inline.
 INJECT_HTML = (
