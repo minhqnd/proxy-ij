@@ -29,7 +29,7 @@ ALLOWED_HOSTS = [
 
 # Nếu True thì XOÁ toàn bộ Content-Security-Policy header/meta trước khi inject.
 # Dùng cho test/dev. KHÔNG bật trên proxy công khai.
-STRIP_CSP = False
+STRIP_CSP = True
 
 # HTML snippet sẽ được inject (string). Có thể chứa style inline.
 INJECT_HTML = (
